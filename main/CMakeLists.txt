@@ -1,0 +1,27 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "app.c"
+        "audio.c"
+        "auth.c"
+        "camera.c"
+        "input.c"
+        "leds.c"
+        "persona.c"
+        "realtime.c"
+        "servos.c"
+        "wifi.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        esp_driver_gpio
+        esp_driver_i2s
+        esp_driver_ledc
+        esp_driver_touch_sens
+        esp_event
+        esp_psram
+        esp_timer
+        esp_wifi
+        json
+        mbedtls
+        nvs_flash
+)

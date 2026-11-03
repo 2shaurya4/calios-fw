@@ -1,0 +1,165 @@
+menu "Calios parrot"
+
+    menu "Wi-Fi"
+        config CALIOS_WIFI_SSID
+            string "Wi-Fi network name (e.g. your phone hotspot)"
+            default ""
+        config CALIOS_WIFI_PASSWORD
+            string "Wi-Fi password"
+            default ""
+    endmenu
+
+    menu "Voice service (OpenAI Realtime API)"
+        config CALIOS_OPENAI_API_KEY
+            string "OpenAI API key"
+            default ""
+            help
+                Stored in the firmware (and in sdkconfig, which .gitignore excludes).
+                Anyone with the parrot and a USB cable could read it, so use a key
+                from a Calios-only project with a monthly budget limit.
+
+        config CALIOS_REALTIME_MODEL
+            string "Realtime model"
+            default "gpt-realtime-2"
+        config CALIOS_VOICE
+            string "Voice (e.g. marin, cedar)"
+            default "marin"
+        config CALIOS_LOG_USER_TRANSCRIPT
+            bool "Also transcribe the learner and print it to the log (costs extra)"
+            default n
+    endmenu
+
+    menu "Personality"
+        config CALIOS_PARROT_NAME
+            string "Parrot's name"
+            default "Calio"
+        config CALIOS_TARGET_LANGUAGE
+            string "Language being learned"
+            default "Spanish"
+        config CALIOS_NATIVE_LANGUAGE
+            string "Learner's native language"
+            default "English"
+        config CALIOS_LEARNER_LEVEL
+            string "Learner level (beginner, intermediate, advanced)"
+            default "beginner"
+    endmenu
+
+    menu "Talking"
+        choice CALIOS_TALK_MODE
+            prompt "How the learner starts talking"
+            default CALIOS_TALK_TAP
+            config CALIOS_TALK_TAP
+                bool "Tap the head; the parrot listens until you finish"
+            config CALIOS_TALK_HOLD
+                bool "Hold the head while talking (walkie-talkie)"
+        endchoice
+
+        choice CALIOS_VAD
+            prompt "How the service decides you finished talking"
+            depends on CALIOS_TALK_TAP
+            default CALIOS_VAD_SEMANTIC
+            config CALIOS_VAD_SEMANTIC
+                bool "Semantic (waits for a finished thought; better for learners)"
+            config CALIOS_VAD_SERVER
+                bool "Silence-based (0.8 s of silence)"
+        endchoice
+
+        config CALIOS_FOLLOWUP_LISTEN_MS
+            int "After the parrot replies, keep listening this long (ms, 0 = off)"
+            depends on CALIOS_TALK_TAP
+            range 0 30000
+            default 6000
+        config CALIOS_NO_SPEECH_TIMEOUT_MS
+            int "Stop listening if nothing is said within (ms)"
+            range 2000 30000
+            default 7000
+        config CALIOS_MAX_LISTEN_MS
+            int "Longest single turn (ms)"
+            range 5000 120000
+            default 30000
+    endmenu
+
+    menu "Audio"
+        config CALIOS_VOLUME
+            int "Speaker volume (%)"
+            range 0 100
+            default 50
+            help
+                The 1 W speaker can be overdriven by the 3 W amp. Raise slowly.
+        config CALIOS_MIC_GAIN
+            int "Microphone gain (x)"
+            range 1 32
+            default 6
+    endmenu
+
+    menu "Head input"
+        choice CALIOS_INPUT
+            prompt "Input type"
+            default CALIOS_INPUT_TOUCH
+            config CALIOS_INPUT_TOUCH
+                bool "Copper-tape touch pad on D0"
+            config CALIOS_INPUT_BUTTON
+                bool "Push button from D0 to GND"
+        endchoice
+        config CALIOS_TOUCH_THRESHOLD_PERMILLE
+            int "Touch threshold (tenths of a percent above the untouched reading)"
+            depends on CALIOS_INPUT_TOUCH
+            range 1 500
+            default 15
+            help
+                15 = a touch is a 1.5% rise. Thicker shells need a lower value. Turn on
+                "Print touch readings" to see the rise you get when you touch the head.
+        config CALIOS_TOUCH_DEBUG
+            bool "Print touch readings twice a second"
+            depends on CALIOS_INPUT_TOUCH
+            default n
+    endmenu
+
+    menu "Servos"
+        config CALIOS_BEAK_CLOSED_DEG
+            int "Beak closed angle"
+            range 0 180
+            default 90
+        config CALIOS_BEAK_OPEN_DEG
+            int "Beak fully open angle"
+            range 0 180
+            default 115
+        config CALIOS_HEAD_CENTER_DEG
+            int "Head straight angle"
+            range 0 180
+            default 90
+        config CALIOS_HEAD_TILT_DEG
+            int "Head tilt amount (degrees)"
+            range 0 60
+            default 18
+        config CALIOS_SERVO_RELAX_WHEN_IDLE
+            bool "Switch servos off when still (quieter, less power)"
+            default y
+    endmenu
+
+    menu "LEDs"
+        config CALIOS_LED_BRIGHTNESS
+            int "Brightness (1-255)"
+            range 1 255
+            default 60
+    endmenu
+
+    menu "Camera"
+        config CALIOS_CAMERA_ENABLE
+            bool "Use the Sense board camera"
+            default y
+        config CALIOS_CAMERA_VGA
+            bool "640x480 photos (off = 320x240)"
+            depends on CALIOS_CAMERA_ENABLE
+            default y
+        config CALIOS_CAMERA_VFLIP
+            bool "Flip the image vertically"
+            depends on CALIOS_CAMERA_ENABLE
+            default n
+        config CALIOS_CAMERA_HMIRROR
+            bool "Mirror the image"
+            depends on CALIOS_CAMERA_ENABLE
+            default n
+    endmenu
+
+endmenu
