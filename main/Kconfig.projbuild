@@ -86,10 +86,31 @@ menu "Calios parrot"
             default 50
             help
                 The 1 W speaker can be overdriven by the 3 W amp. Raise slowly.
+        choice CALIOS_MIC
+            prompt "Microphone"
+            default CALIOS_MIC_EXTERNAL
+            help
+                External: an INMP441 (or ICS-43434) I2S mic module on D8/D9/D10, so the
+                mic can sit away from the speaker. Onboard: the PDM mic on the Sense board.
+            config CALIOS_MIC_EXTERNAL
+                bool "External INMP441 I2S mic (D8 SCK, D9 WS, D10 SD)"
+            config CALIOS_MIC_ONBOARD
+                bool "Onboard Sense-board mic"
+        endchoice
         config CALIOS_MIC_GAIN
-            int "Microphone gain (x)"
+            int "Onboard mic gain (x)"
+            depends on CALIOS_MIC_ONBOARD
             range 1 32
             default 6
+        config CALIOS_EXT_MIC_GAIN
+            int "External mic gain (x)"
+            depends on CALIOS_MIC_EXTERNAL
+            range 1 64
+            default 24
+            help
+                The INMP441's raw level is low. 24x suits a mouth about 15-20 cm away
+                (shoulder mount). Raise it if the parrot misses you; lower it if it
+                hears background chatter as speech.
     endmenu
 
     menu "Head input"
@@ -160,6 +181,15 @@ menu "Calios parrot"
             bool "Mirror the image"
             depends on CALIOS_CAMERA_ENABLE
             default n
+        config CALIOS_CAMERA_PREVIEW
+            bool "Camera preview web page (for testing)"
+            depends on CALIOS_CAMERA_ENABLE
+            default y
+            help
+                Serves http://<parrot IP>/ with a live view, a snapshot, and the last
+                photo the parrot sent to OpenAI. The IP is printed in the log. Anyone on
+                the same Wi-Fi can open it, so turn this off before using the parrot on a
+                shared network. The red privacy LED stays on while the live view is open.
     endmenu
 
 endmenu

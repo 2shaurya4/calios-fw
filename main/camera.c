@@ -1,4 +1,6 @@
 #include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "esp_camera.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -9,6 +11,9 @@
 
 static const char *TAG = "camera";
 static bool s_ok;
+static SemaphoreHandle_t s_lock;  // the parrot and the preview page share the camera
+static uint8_t *s_last;           // last photo the parrot took
+static size_t s_last_len;
 
 esp_err_t camera_init(void)
 {
@@ -58,6 +63,7 @@ esp_err_t camera_init(void)
 #endif
         ESP_LOGI(TAG, "camera ready (sensor PID 0x%x)", s->id.PID);
     }
+    s_lock = xSemaphoreCreateMutex();
     s_ok = true;
     return ESP_OK;
 }
@@ -67,31 +73,75 @@ bool camera_available(void)
     return s_ok;
 }
 
-esp_err_t camera_capture(uint8_t **jpg, size_t *len)
+static uint8_t *copy_to_psram(const uint8_t *src, size_t len)
+{
+    uint8_t *p = heap_caps_malloc(len, MALLOC_CAP_SPIRAM);
+    if (p) {
+        memcpy(p, src, len);
+    }
+    return p;
+}
+
+static esp_err_t grab(uint8_t **jpg, size_t *len, bool drop_stale)
 {
     if (!s_ok) {
         return ESP_ERR_INVALID_STATE;
     }
-    camera_fb_t *fb = esp_camera_fb_get();  // may be a stale frame; drop it
-    if (fb) {
-        esp_camera_fb_return(fb);
+    esp_err_t err = ESP_FAIL;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    camera_fb_t *fb;
+    if (drop_stale) {
+        fb = esp_camera_fb_get();  // may be a stale frame; drop it
+        if (fb) {
+            esp_camera_fb_return(fb);
+        }
     }
     fb = esp_camera_fb_get();
-    if (!fb) {
-        return ESP_FAIL;
-    }
-    if (fb->format != PIXFORMAT_JPEG || fb->len == 0) {
+    if (fb) {
+        if (fb->format == PIXFORMAT_JPEG && fb->len > 0) {
+            *jpg = copy_to_psram(fb->buf, fb->len);
+            *len = fb->len;
+            err = *jpg ? ESP_OK : ESP_ERR_NO_MEM;
+        }
         esp_camera_fb_return(fb);
-        return ESP_FAIL;
     }
-    uint8_t *copy = heap_caps_malloc(fb->len, MALLOC_CAP_SPIRAM);
-    if (!copy) {
-        esp_camera_fb_return(fb);
-        return ESP_ERR_NO_MEM;
+    xSemaphoreGive(s_lock);
+    return err;
+}
+
+esp_err_t camera_capture(uint8_t **jpg, size_t *len)
+{
+    esp_err_t err = grab(jpg, len, true);
+    if (err == ESP_OK) {
+        uint8_t *keep = copy_to_psram(*jpg, *len);
+        if (keep) {
+            xSemaphoreTake(s_lock, portMAX_DELAY);
+            free(s_last);
+            s_last = keep;
+            s_last_len = *len;
+            xSemaphoreGive(s_lock);
+        }
     }
-    memcpy(copy, fb->buf, fb->len);
-    *jpg = copy;
-    *len = fb->len;
-    esp_camera_fb_return(fb);
-    return ESP_OK;
+    return err;
+}
+
+esp_err_t camera_grab_frame(uint8_t **jpg, size_t *len)
+{
+    return grab(jpg, len, false);
+}
+
+esp_err_t camera_copy_last_photo(uint8_t **jpg, size_t *len)
+{
+    if (!s_ok) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t err = ESP_ERR_NOT_FOUND;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    if (s_last) {
+        *jpg = copy_to_psram(s_last, s_last_len);
+        *len = s_last_len;
+        err = *jpg ? ESP_OK : ESP_ERR_NO_MEM;
+    }
+    xSemaphoreGive(s_lock);
+    return err;
 }

@@ -12,6 +12,7 @@
 #include "camera.h"
 #include "input.h"
 #include "leds.h"
+#include "preview.h"
 #include "realtime.h"
 #include "servos.h"
 #include "wifi.h"
@@ -50,6 +51,11 @@ void app_main(void)
 #endif
     input_init();
     wifi_start();
+#if CONFIG_CALIOS_CAMERA_PREVIEW
+    if (camera_available()) {
+        preview_start();
+    }
+#endif
     realtime_start();
 
     ESP_LOGI(TAG, "free internal RAM %u, free PSRAM %u",

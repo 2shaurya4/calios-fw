@@ -8,6 +8,7 @@ idf_component_register(
         "input.c"
         "leds.c"
         "persona.c"
+        "preview.c"
         "realtime.c"
         "servos.c"
         "wifi.c"
@@ -18,6 +19,7 @@ idf_component_register(
         esp_driver_ledc
         esp_driver_touch_sens
         esp_event
+        esp_http_server
         esp_psram
         esp_timer
         esp_wifi

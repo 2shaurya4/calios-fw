@@ -10,7 +10,7 @@
 | 4 | OpenAI transcription (`gpt-4o-mini-transcribe`) | Printing what the learner said to the log | Optional (off by default) | Per audio minute |
 | 5 | Espressif component registry + ESP-IDF v5.5 | Building the firmware | Build time only | Free |
 
-Nothing else is called. There's no database, no analytics, no time server, and no Bluetooth. Speech-to-text, the language model, text-to-speech, and vision all happen inside the one Realtime session, so there's no separate STT or TTS service to set up.
+Nothing else is called. (The camera preview page is served by the parrot itself on your local Wi-Fi; it doesn't use any outside service.) There's no database, no analytics, no time server, and no Bluetooth. Speech-to-text, the language model, text-to-speech, and vision all happen inside the one Realtime session, so there's no separate STT or TTS service to set up.
 
 ## 1. Wi-Fi
 
@@ -88,6 +88,7 @@ Turning on menuconfig → Voice service → **Also transcribe the learner** adds
 
 - The mic is only streamed while the status LED is **blue**. Nothing is sent while idle.
 - Photos are taken only when you hold the head or ask the parrot to look. Each photo plays a shutter click and lights the red privacy LED.
+- The camera preview page (for testing) is served only on the local Wi-Fi, never to the internet. The privacy LED stays on while its live view is open. Turn it off in menuconfig before using the parrot on a shared network.
 - The persona tells the model not to describe faces or guess who someone is.
 - Audio and photos go to OpenAI under its API data policy. Check OpenAI's current API data-usage terms before demoing with real users.
 

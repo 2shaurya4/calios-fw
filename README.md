@@ -53,12 +53,29 @@ If the board isn't detected, hold the **B** (boot) button on the XIAO while plug
 
 When it's connected you'll hear a two-note chirp and the LED goes dim teal. The log shows what the parrot says, prefixed with its name.
 
+## Seeing what the camera sees
+
+When the parrot connects to Wi-Fi, the log prints a line like:
+
+```
+preview: Camera preview: http://172.20.10.5/
+```
+
+Open that address in a browser on a device connected to the same Wi-Fi (or phone hotspot) as the parrot. The page shows:
+
+- **Live:** the camera's view, about 10 frames a second. Use it to aim the camera and check focus, flip and mirror.
+- **Save a snapshot:** downloads the current frame.
+- **Last photo the parrot sent:** exactly what the model saw the last time it took a photo. Use it to check why it named something wrong.
+
+The red privacy LED stays on while the live view is open. Anyone on the same Wi-Fi can open the page, so turn it off (menuconfig → Camera → **Camera preview web page**) before using the parrot on a shared network.
+
 ## Tuning (all in menuconfig → Calios parrot)
 
 | Problem | Setting |
 |---|---|
 | Too quiet / too loud / distorted | Audio → Speaker volume (default 50%) |
-| It doesn't hear you, or cuts you off | Audio → Microphone gain (default 6×) |
+| It doesn't hear you, or cuts you off | Audio → External mic gain (default 24×), or Onboard mic gain (6×) if you use the built-in mic |
+| No external mic wired yet | Audio → Microphone → **Onboard** |
 | Touch doesn't register through the shell | Head input → turn on **Print touch readings**, then lower **Touch threshold** to about half the rise you see |
 | Touch is flaky | Head input → **Push button**, and wire a button from D0 to GND |
 | Beak doesn't close fully / opens too far | Servos → beak closed / open angles |
@@ -66,7 +83,7 @@ When it's connected you'll hear a two-note chirp and the LED goes dim teal. The 
 | Beak droops when idle | Servos → turn off **Switch servos off when still** |
 | Cuts in while you pause to think | Talking → keep **Semantic** detection (default) |
 | Noisy place, you'd rather control it | Talking → **Hold the head while talking** |
-| Photo upside down / mirrored | Camera → flip / mirror |
+| Photo upside down / mirrored | Camera → flip / mirror (check it on the preview page) |
 | Want it to stop listening after each reply | Talking → follow-up time = 0 |
 
 To change how the parrot teaches (correction style, how much native language, etc.), edit the text in `main/persona.c`.
@@ -78,11 +95,12 @@ To change how the parrot teaches (correction style, how much native language, et
 | `main/board.h` | Every pin. Change wiring here. |
 | `main/app.c` | The state machine: what each tap does, listening, timeouts, photos |
 | `main/realtime.c` | The OpenAI Realtime WebSocket: session setup, streaming, replies, interrupting, the photo tool |
-| `main/audio.c` | Mic capture (PDM), speaker playback (I2S), chirps, loudness for the beak |
+| `main/audio.c` | Mic capture (external INMP441 or onboard PDM), speaker playback (I2S), chirps, loudness for the beak |
 | `main/servos.c` | Beak and head motion |
 | `main/leds.c` | Status and privacy LED patterns |
 | `main/input.c` | Touch pad / button |
-| `main/camera.c` | Photo capture |
+| `main/camera.c` | Photo capture, shared safely between the parrot and the preview page |
+| `main/preview.c` | Camera preview web page (live view, snapshot, last photo) |
 | `main/persona.c` | The parrot's personality and teaching rules |
 | `main/auth.c` | Reads the API key from menuconfig |
 | `main/wifi.c` | Wi-Fi |
@@ -90,6 +108,6 @@ To change how the parrot teaches (correction style, how much native language, et
 
 ## Status
 
-- Compiles cleanly with ESP-IDF v5.5.3 and v5.5.6 for the ESP32-S3 in three configurations: default; hold-to-talk + button + no camera; and silence-based detection + touch debug + small photos.
+- Compiles cleanly with ESP-IDF v5.5.3 and v5.5.6 for the ESP32-S3 in three configurations: default (external mic); hold-to-talk + button + no camera; and onboard mic + silence-based detection + touch debug + small photos.
 - **Not yet run on hardware.** The parts most likely to need adjusting on the first run are mic gain, the touch threshold, servo angles and speaker volume. All four are menuconfig settings, so no code changes should be needed.
 - Not handled yet: trimming the conversation history when you interrupt (the model may assume you heard its whole reply), Wi-Fi setup without menuconfig, over-the-air updates, and battery operation.

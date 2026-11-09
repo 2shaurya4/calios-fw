@@ -1,8 +1,10 @@
 # Calios parrot MVP: wiring
 
-This covers the stage-1 MVP: a XIAO ESP32S3 Sense, a MAX98357A amp and speaker, two SG92R servos (beak and head tilt), two NeoPixels (status and camera-privacy), and a copper-tape touch pad, all powered from a USB-C power bank.
+This covers the stage-1 MVP: a XIAO ESP32S3 Sense, an INMP441 microphone, a MAX98357A amp and speaker, two SG92R servos (beak and head tilt), two NeoPixels (status and camera-privacy), and a copper-tape touch pad, all powered from a USB-C power bank.
 
-![Wiring diagram](wiring.png)
+![Pin-by-pin wiring diagram](wiring.png)
+
+The diagram draws every wire, including power and ground. A dot means connected; lines that cross without a dot are not connected.
 
 ## Pin map
 
@@ -16,16 +18,20 @@ This covers the stage-1 MVP: a XIAO ESP32S3 Sense, a MAX98357A amp and speaker, 
 | D5 | GPIO6 | MAX98357A **LRC** | I2S word select |
 | D6 | GPIO43 | MAX98357A **DIN** | I2S audio data |
 | D7 | GPIO44 | MAX98357A **SD** | Amp on/off. The firmware switches it off after 2 s of silence, which removes hiss. |
-| D8–D10 | GPIO7–9 | Nothing | Spare. These are shared with the Sense board's microSD slot, so keep the slot empty if you use them. |
+| D8 | GPIO7 | INMP441 **SCK** | Mic bit clock |
+| D9 | GPIO8 | INMP441 **WS** | Mic word select |
+| D10 | GPIO9 | INMP441 **SD** | Mic audio data |
+| 3V3 | – | INMP441 **VDD** | The mic is a 3.3 V part. Never connect it to 5 V. |
 | 5V | – | Breadboard **+ rail** | USB power from the power bank. |
 | GND | – | Breadboard **− rail** | |
-| 3V3 | – | Nothing | Only used if the NeoPixels need it (see below). |
+
+D8–D10 are shared with the Sense board's microSD slot, so keep the slot empty.
 
 On the Sense board (clips onto the XIAO, no wiring):
 
 | Part | Pins |
 |---|---|
-| PDM microphone | CLK GPIO42, DATA GPIO41 |
+| PDM microphone (only if you pick the onboard mic in menuconfig) | CLK GPIO42, DATA GPIO41 |
 | Camera (OV2640 / OV3660) | XCLK 10, SDA 40, SCL 39, D0–D7 = 15, 17, 18, 16, 14, 12, 11, 48, VSYNC 38, HREF 47, PCLK 13 |
 
 The firmware's copy of this table is `main/board.h`. If you move a wire, change it there too.
@@ -82,6 +88,21 @@ Put #0 where people can see it (the chest or the back of the head) and #1 right 
 
 The XIAO's data signal is 3.3 V and the LEDs run on 5 V, which normally works with short wires. If the colors flicker or come out wrong, move the LEDs' + wires from the 5 V rail to the XIAO's **3V3** pin. They get a bit dimmer but stay reliable.
 
+### Microphone (INMP441)
+
+| Mic pin | Goes to |
+|---|---|
+| VDD | XIAO **3V3** (not the 5 V rail) |
+| GND | − rail |
+| L/R | − rail (selects the left channel, which the firmware reads) |
+| WS | D9 |
+| SCK | D8 |
+| SD | D10 |
+
+- The sound hole is on the **back** of most INMP441 boards, through the PCB. Face that side toward the wearer's mouth.
+- The firmware uses this mic by default. To go back to the Sense board's built-in mic, set menuconfig → Calios parrot → Audio → **Microphone** to onboard.
+- When it starts, the log should show `mic: external INMP441 on GPIO7/8/9, gain 24x`. If the parrot never hears you, check SCK/WS/SD aren't swapped and L/R is grounded. If it hears you but cuts in on background noise, lower **External mic gain**.
+
 ### Touch pad (copper tape)
 
 1. Stick a piece of copper tape about 2 × 2 cm on the **inside** of the head shell, where you'd tap.
@@ -96,13 +117,13 @@ If touch gives you trouble, wire a push button from D0 to GND and pick **Push bu
 
 Both are on the Sense board, so there's nothing to wire. Placement still matters:
 
-- **Mic:** keep the speaker as far from the XIAO as the body allows, facing away from it. The parrot doesn't listen while it's talking, but less echo means fewer false starts.
-- **Camera:** the camera can look out one eye hole, since the eye screens aren't in the MVP. That puts the XIAO in the head, with a 7-wire bundle running down to the breadboard in the body: 5V, GND, D3 (head-tilt servo, which sits in the neck), and D4–D7 (amp). The beak servo, touch pad, and NeoPixels are in the head too, so their wires stay short; they take 5V and GND from the bundle. The power bank cable then plugs into the XIAO's USB-C port in the back of the head. Use soft silicone jumper wire for the bundle so the head can still tilt.
+- **Mic:** mount the INMP441 in the side of the head that faces the wearer, with its sound hole toward their mouth, and keep the speaker at the other end of the body facing outward. The parrot doesn't listen while it's talking, but less echo means fewer false starts.
+- **Camera:** the camera can look out one eye hole, since the eye screens aren't in the MVP. That puts the XIAO in the head, with a 7-wire bundle running down to the breadboard in the body: 5V, GND, D3 (head-tilt servo, which sits in the neck), and D4–D7 (amp). The beak servo, touch pad, NeoPixels, and mic are in the head too, so their wires stay short; the servo and LEDs take 5V and GND from the bundle, and the mic takes 3V3 straight from the XIAO. The power bank cable then plugs into the XIAO's USB-C port in the back of the head. Use soft silicone jumper wire for the bundle so the head can still tilt.
 
 ## Suggested build order
 
 1. **Desk test, XIAO on the breadboard.** Wire power and the amp first, flash the firmware, and check that you hear the startup chirp once it connects.
-2. Add the touch pad (or a bare wire) and have a conversation.
+2. Add the mic and the touch pad (or a bare wire) and have a conversation.
 3. Add the servos with nothing attached and watch them move while it talks.
 4. Add the NeoPixels.
 5. **Move into the body:** XIAO into the head with the 7-wire bundle, breadboard and caps in the body, speaker facing out of the chest.
@@ -116,6 +137,7 @@ Both are on the Sense board, so there's nothing to wire. Placement still matters
 | Amp + speaker at 50% | 50–150 mA | ~300 mA |
 | Servos, moving | 100–250 mA each | 600 mA+ each if stalled |
 | NeoPixels at default brightness | ~15 mA | ~40 mA |
+| INMP441 mic | ~1.5 mA | ~1.5 mA |
 | **Total** | **~0.5–0.8 A** | **~1.5 A** |
 
 A 5,000 mAh power bank should run it for a few hours of active conversation. These numbers are estimates, not measurements, so check with your USB power meter.

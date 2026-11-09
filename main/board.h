@@ -14,8 +14,12 @@
 #define PIN_I2S_LRCLK    GPIO_NUM_6    // D5: MAX98357A LRC
 #define PIN_I2S_DOUT     GPIO_NUM_43   // D6: MAX98357A DIN
 #define PIN_AMP_SD       GPIO_NUM_44   // D7: MAX98357A SD (low = amp off)
-// D8, D9, D10 (GPIO7/8/9) are free, but shared with the Sense board's microSD
-// slot. Keep the slot empty if you use them.
+// External I2S mic (INMP441), when selected in menuconfig. These pins are shared
+// with the Sense board's microSD slot, so keep the slot empty.
+#define PIN_EXT_MIC_SCK  GPIO_NUM_7    // D8: INMP441 SCK (bit clock)
+#define PIN_EXT_MIC_WS   GPIO_NUM_8    // D9: INMP441 WS (word select)
+#define PIN_EXT_MIC_SD   GPIO_NUM_9    // D10: INMP441 SD (data out of the mic)
+// INMP441 L/R -> GND (left channel), VDD -> 3V3 (not 5V), GND -> GND
 
 // ---- On the Sense expansion board (no wiring needed) ----------------------
 #define PIN_PDM_CLK      GPIO_NUM_42   // onboard PDM microphone clock

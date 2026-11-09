@@ -1,6 +1,7 @@
 // Audio in and out.
 //
-//  Mic:     onboard PDM mic (Sense board) -> I2S0 PDM RX @ 24 kHz -> high-pass + gain
+//  Mic:     external INMP441 (I2S0 standard RX, 32-bit slots) or onboard PDM mic
+//           (I2S0 PDM RX) @ 24 kHz -> high-pass + gain
 //           -> mic stream buffer -> sender task -> mic callback (realtime) in 100 ms chunks
 //  Speaker: replies/chirps -> playback stream buffer (45 s, PSRAM) -> playback task
 //           -> volume -> I2S1 standard TX -> MAX98357A -> speaker
@@ -15,7 +16,7 @@
 #include "freertos/stream_buffer.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
-#include "driver/i2s_pdm.h"
+#include "driver/i2s_pdm.h"  // onboard mic
 #include "driver/i2s_std.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -238,20 +239,46 @@ void audio_play_chirp(chirp_t chirp)
 
 // ---- Microphone ---------------------------------------------------------------
 
+#if CONFIG_CALIOS_MIC_EXTERNAL
+#define MIC_GAIN CONFIG_CALIOS_EXT_MIC_GAIN
+#else
+#define MIC_GAIN CONFIG_CALIOS_MIC_GAIN
+#endif
+
+// Reads one 20 ms frame as 16-bit samples, whichever mic is fitted.
+static size_t mic_read_frame(int16_t *frame)
+{
+    size_t bytes = 0;
+#if CONFIG_CALIOS_MIC_EXTERNAL
+    // The INMP441 sends 24-bit samples left-aligned in 32-bit slots. Keep the top
+    // 16 bits; MIC_GAIN makes up the level afterwards.
+    static int32_t raw[MIC_FRAME];
+    if (i2s_channel_read(s_rx, raw, sizeof(raw), &bytes, portMAX_DELAY) != ESP_OK) {
+        return 0;
+    }
+    size_t n = bytes / sizeof(int32_t);
+    for (size_t i = 0; i < n; i++) {
+        frame[i] = (int16_t)(raw[i] >> 16);
+    }
+    return n;
+#else
+    if (i2s_channel_read(s_rx, frame, MIC_FRAME * sizeof(int16_t), &bytes, portMAX_DELAY) != ESP_OK) {
+        return 0;
+    }
+    return bytes / sizeof(int16_t);
+#endif
+}
+
 static void mic_task(void *arg)
 {
     static int16_t frame[MIC_FRAME];
-    const float gain = (float)CONFIG_CALIOS_MIC_GAIN;
+    const float gain = (float)MIC_GAIN;
     float hp_x = 0, hp_y = 0;
 
     for (;;) {
-        size_t bytes = 0;
-        if (i2s_channel_read(s_rx, frame, sizeof(frame), &bytes, portMAX_DELAY) != ESP_OK) {
-            continue;
-        }
-        size_t n = bytes / 2;
+        size_t n = mic_read_frame(frame);
         for (size_t i = 0; i < n; i++) {
-            // One-pole high-pass (~20 Hz) removes the PDM mic's DC offset.
+            // One-pole high-pass (~20 Hz) removes the mic's DC offset.
             float x = frame[i];
             float y = x - hp_x + 0.995f * hp_y;
             hp_x = x;
@@ -330,11 +357,30 @@ esp_err_t audio_init(audio_mic_cb_t mic_cb)
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(s_tx, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(s_tx));
 
-    // Microphone: PDM RX is only available on I2S0 on the ESP32-S3.
+    // Microphone on I2S0.
     i2s_chan_config_t rx_chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     rx_chan.dma_desc_num = 8;
     rx_chan.dma_frame_num = MIC_FRAME;
     ESP_ERROR_CHECK(i2s_new_channel(&rx_chan, NULL, &s_rx));
+#if CONFIG_CALIOS_MIC_EXTERNAL
+    // INMP441: standard I2S, 64 clocks per frame (32-bit slots), L/R tied to GND
+    // so it talks in the left slot. 24 kHz -> 1.536 MHz SCK, within its range.
+    i2s_std_config_t mic_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(AUDIO_SAMPLE_RATE),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .gpio_cfg = {
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = PIN_EXT_MIC_SCK,
+            .ws = PIN_EXT_MIC_WS,
+            .dout = I2S_GPIO_UNUSED,
+            .din = PIN_EXT_MIC_SD,
+        },
+    };
+    mic_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(s_rx, &mic_cfg));
+    ESP_LOGI(TAG, "mic: external INMP441 on GPIO%d/%d/%d, gain %dx",
+             PIN_EXT_MIC_SCK, PIN_EXT_MIC_WS, PIN_EXT_MIC_SD, MIC_GAIN);
+#else
     i2s_pdm_rx_config_t pdm_cfg = {
         .clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(AUDIO_SAMPLE_RATE),
         .slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
@@ -344,6 +390,8 @@ esp_err_t audio_init(audio_mic_cb_t mic_cb)
         },
     };
     ESP_ERROR_CHECK(i2s_channel_init_pdm_rx_mode(s_rx, &pdm_cfg));
+    ESP_LOGI(TAG, "mic: onboard PDM, gain %dx", MIC_GAIN);
+#endif
     ESP_ERROR_CHECK(i2s_channel_enable(s_rx));
 
     // Big buffers live in PSRAM.
